@@ -49,6 +49,6 @@ module.exports = async (req, res) => {
     res.status(405).end();
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: 'erro de servidor' });
+    res.status(500).json({ error: process.env.MONGODB_URI ? e.message : 'MONGODB_URI não está definida no Vercel' });
   }
 };

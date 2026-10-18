@@ -86,7 +86,9 @@ cur.setDate(1);
 async function api(r,method='GET',body,qs=''){
   const res=await fetch(`/api/data?r=${r}${qs}`,{method,headers:{'Content-Type':'application/json','x-auth':pw},body:body?JSON.stringify(body):undefined});
   if(res.status===401){pw=prompt('Palavra-passe:')||'';localStorage.setItem('pw',pw);return api(r,method,body,qs);}
-  return res.json();
+  const j=await res.json().catch(()=>({error:'resposta inválida do servidor (HTTP '+res.status+') – a API /api/data está a correr?'}));
+  if(!res.ok){alert('Erro: '+(j.error||res.status));throw new Error(j.error);}
+  return j;
 }
 const ym=()=>`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
 const color=id=>(cats.find(c=>c._id===id)||{}).color||'#999';
