@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planeador mensal</title>
+<style>
+:root{--bg:#f1e3dc;--paper:#fbf6f0;--pink:#f5e1da;--line:#6b625c;--ink:#2b2522}
+*{box-sizing:border-box}
+body{margin:0;padding:24px;background:var(--bg);color:var(--ink);font-family:"Helvetica Neue",Arial,sans-serif;font-size:13px}
+.sheet{max-width:1200px;margin:auto;background:var(--paper);padding:22px 26px;box-shadow:0 4px 18px #0002}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px}
+h1{margin:0;font:400 28px "Didot","Bodoni MT",Georgia,serif;letter-spacing:1px;text-transform:uppercase}
+.months{display:flex;gap:2px;background:var(--pink);border-radius:20px;padding:4px 10px}
+.months button{border:0;background:none;color:#8a7b74;font-size:11px;padding:3px 5px;border-radius:10px;cursor:pointer}
+.months button.on{background:var(--ink);color:#fff}
+.year{display:flex;align-items:center;gap:8px;margin:8px 0 4px;letter-spacing:1px}
+.year button{border:0;background:none;cursor:pointer;font-size:16px}
+main{display:grid;grid-template-columns:1fr 280px;gap:18px}
+.dow,.grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.dow div{padding:2px 6px;color:#555}
+.grid{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.cell{min-height:104px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px;position:relative;overflow:hidden}
+.cell:nth-child(7n){border-right:0}
+.cell.empty{background:#f4ede6}
+.num{display:inline-flex;width:20px;height:20px;border:1px solid var(--line);border-radius:50%;align-items:center;justify-content:center;font-size:10px}
+.today .num{background:var(--ink);color:#fff}
+.add{position:absolute;top:3px;right:4px;border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:#8a7b74}
+.add:hover{color:var(--ink)}
+.ev{margin-top:3px;padding:2px 6px;border-radius:6px;color:#fff;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+aside{display:flex;flex-direction:column;gap:14px}
+.box{border-radius:14px;padding:12px}
+.box h3{margin:-2px auto 10px;width:max-content;background:var(--paper);padding:2px 14px;border-radius:10px;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:500}
+.legend{background:var(--pink)}
+.todo{border:1px solid var(--line)}
+.li{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #b9aea6}
+.li span{flex:1}.li.done span{text-decoration:line-through;color:#999}
+.li input[type=color]{width:22px;height:22px;border:0;padding:0;background:none;cursor:pointer}
+.x{border:0;background:none;cursor:pointer;color:#a99;font-size:15px}
+.row{display:flex;gap:6px;margin-top:8px}
+input[type=text],textarea,select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit}
+button.p{border:0;background:var(--ink);color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer}
+dialog{border:0;border-radius:14px;padding:18px;width:min(420px,92vw);background:var(--paper)}
+dialog::backdrop{background:#0006}
+dialog label{display:block;margin:8px 0 3px;font-size:11px;letter-spacing:1px;text-transform:uppercase}
+@media(max-width:860px){main{grid-template-columns:1fr}.cell{min-height:70px}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header><h1>Planeador mensal</h1><div class="months" id="months"></div></header>
+  <div class="year"><button id="prev">‹</button><span id="ym"></span><button id="next">›</button></div>
+  <main>
+    <section>
+      <div class="dow"><div>seg</div><div>ter</div><div>qua</div><div>qui</div><div>sex</div><div>sáb</div><div>dom</div></div>
+      <div class="grid" id="grid"></div>
+    </section>
+    <aside>
+      <div class="box legend"><h3>Legenda</h3><div id="legend"></div>
+        <div class="row"><input type="text" id="cn" placeholder="Nova categoria"><input type="color" id="cc" value="#c97b84"><button class="p" id="ca">+</button></div>
+      </div>
+      <div class="box todo"><h3>To do</h3><div id="todos"></div>
+        <div class="row"><input type="text" id="tn" placeholder="Nova tarefa"><button class="p" id="ta">+</button></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <div id="dd" style="font-family:Georgia,serif;font-size:18px"></div>
+  <label>Cabeçalho</label><input type="text" id="et">
+  <label>Detalhes</label><textarea id="ed" rows="5"></textarea>
+  <label>Categoria</label><select id="ec"></select>
+  <div class="row" style="justify-content:flex-end">
+    <button class="x" id="edel" style="color:#b44">Apagar</button>
+    <button class="p" id="ecancel" style="background:#999">Cancelar</button>
+    <button class="p" id="esave">Guardar</button>
+  </div>
+</dialog>
+
+<script>
+const $=s=>document.querySelector(s), MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+let pw=localStorage.getItem('pw')||'', cur=new Date(), events=[], cats=[], todos=[], editing=null;
+cur.setDate(1);
+
+async function api(r,method='GET',body,qs=''){
+  const res=await fetch(`/api/data?r=${r}${qs}`,{method,headers:{'Content-Type':'application/json','x-auth':pw},body:body?JSON.stringify(body):undefined});
+  if(res.status===401){pw=prompt('Palavra-passe:')||'';localStorage.setItem('pw',pw);return api(r,method,body,qs);}
+  return res.json();
+}
+const ym=()=>`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
+const color=id=>(cats.find(c=>c._id===id)||{}).color||'#999';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function loadMonth(){events=await api('events','GET',null,'&month='+ym());renderCal();}
+async function init(){
+  cats=await api('categories');
+  if(!cats.length){for(const c of [['Trabalho','#7a9e9f'],['Pessoal','#c97b84'],['Estudo','#b59a6d']])await api('categories','POST',{name:c[0],color:c[1]});cats=await api('categories');}
+  todos=await api('todos');
+  renderLegend();renderTodos();await loadMonth();
+}
+
+function renderCal(){
+  $('#ym').textContent=cur.getFullYear();
+  $('#months').innerHTML=MES.map((m,i)=>`<button data-m="${i}" class="${i===cur.getMonth()?'on':''}">${m}</button>`).join('');
+  const y=cur.getFullYear(),m=cur.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate(),rows=Math.ceil((off+n)/7);
+  const t=new Date();let h='';
+  for(let i=0;i<rows*7;i++){
+    const d=i-off+1;
+    if(d<1||d>n){h+='<div class="cell empty"></div>';continue;}
+    const date=`${ym()}-${String(d).padStart(2,'0')}`,isT=t.getFullYear()===y&&t.getMonth()===m&&t.getDate()===d;
+    h+=`<div class="cell ${isT?'today':''}"><span class="num">${d}</span><button class="add" data-date="${date}" title="Adicionar atividade">+</button>`+
+      events.filter(e=>e.date===date).map(e=>`<div class="ev" data-id="${e._id}" title="${esc(e.details||'')}" style="background:${color(e.categoryId)}">${esc(e.title)}</div>`).join('')+'</div>';
+  }
+  $('#grid').innerHTML=h;
+}
+function renderLegend(){
+  $('#legend').innerHTML=cats.map(c=>`<div class="li"><input type="color" value="${c.color}" data-cid="${c._id}"><span>${esc(c.name)}</span><button class="x" data-cdel="${c._id}">×</button></div>`).join('');
+}
+function renderTodos(){
+  $('#todos').innerHTML=todos.map(t=>`<div class="li ${t.done?'done':''}"><input type="checkbox" ${t.done?'checked':''} data-tid="${t._id}"><span>${esc(t.text)}</span><button class="x" data-tdel="${t._id}">×</button></div>`).join('');
+}
+
+function openDlg(date,ev){
+  editing=ev?ev._id:null;
+  $('#dd').textContent=date.split('-').reverse().join('/');$('#dlg').dataset.date=date;
+  $('#et').value=ev?ev.title:'';$('#ed').value=ev?ev.details||'':'';
+  $('#ec').innerHTML=cats.map(c=>`<option value="${c._id}" ${ev&&ev.categoryId===c._id?'selected':''}>${esc(c.name)}</option>`).join('');
+  $('#edel').style.display=ev?'':'none';$('#dlg').showModal();$('#et').focus();
+}
+
+document.addEventListener('click',async e=>{
+  const t=e.target;
+  if(t.dataset.m!==undefined){cur.setMonth(+t.dataset.m);loadMonth();}
+  else if(t.id==='prev'||t.id==='next'){cur.setFullYear(cur.getFullYear()+(t.id==='next'?1:-1));loadMonth();}
+  else if(t.dataset.date)openDlg(t.dataset.date);
+  else if(t.classList.contains('ev'))openDlg(events.find(x=>x._id===t.dataset.id).date,events.find(x=>x._id===t.dataset.id));
+  else if(t.dataset.cdel){await api('categories','DELETE',null,'&id='+t.dataset.cdel);cats=cats.filter(c=>c._id!==t.dataset.cdel);renderLegend();renderCal();}
+  else if(t.dataset.tdel){await api('todos','DELETE',null,'&id='+t.dataset.tdel);todos=todos.filter(x=>x._id!==t.dataset.tdel);renderTodos();}
+  else if(t.dataset.tid){const x=todos.find(x=>x._id===t.dataset.tid);x.done=t.checked;renderTodos();api('todos','PUT',{done:x.done},'&id='+x._id);}
+});
+document.addEventListener('change',async e=>{
+  const id=e.target.dataset.cid;if(!id)return;
+  cats.find(c=>c._id===id).color=e.target.value;renderCal();
+  api('categories','PUT',{color:e.target.value},'&id='+id);
+});
+$('#ca').onclick=async()=>{const name=$('#cn').value.trim();if(!name)return;
+  cats.push(await api('categories','POST',{name,color:$('#cc').value}));$('#cn').value='';renderLegend();};
+$('#ta').onclick=async()=>{const text=$('#tn').value.trim();if(!text)return;
+  todos.push(await api('todos','POST',{text}));$('#tn').value='';renderTodos();};
+$('#tn').onkeydown=e=>{if(e.key==='Enter')$('#ta').click();};
+$('#cn').onkeydown=e=>{if(e.key==='Enter')$('#ca').click();};
+$('#ecancel').onclick=()=>$('#dlg').close();
+$('#esave').onclick=async()=>{
+  const title=$('#et').value.trim();if(!title)return $('#et').focus();
+  const body={date:$('#dlg').dataset.date,title,details:$('#ed').value,categoryId:$('#ec').value};
+  if(editing)await api('events','PUT',body,'&id='+editing);else await api('events','POST',body);
+  $('#dlg').close();loadMonth();
+};
+$('#edel').onclick=async()=>{await api('events','DELETE',null,'&id='+editing);$('#dlg').close();loadMonth();};
+init();
+</script>
+</body>
+</html>
